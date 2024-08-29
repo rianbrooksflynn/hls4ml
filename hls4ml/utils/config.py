@@ -273,6 +273,7 @@ def config_from_pytorch_model(
     backend=None,
     default_precision='ap_fixed<16,6>',
     default_reuse_factor=1,
+    default_tiling_factor=[1,1,1],
     channels_last_conversion='full',
     transpose_outputs=True,
 ):
@@ -316,6 +317,7 @@ def config_from_pytorch_model(
     model_config = {}
     model_config['Precision'] = default_precision
     model_config['ReuseFactor'] = default_reuse_factor
+    model_config['TilingFactor'] = default_tiling_factor
     model_config['ChannelsLastConversion'] = channels_last_conversion
     model_config['TransposeOutputs'] = transpose_outputs
     model_config['Strategy'] = 'Latency'

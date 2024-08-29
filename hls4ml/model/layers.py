@@ -1350,6 +1350,32 @@ class SymbolicExpression(Layer):
         self.add_output_variable([len(self.get_attr('expression'))], [f'N_OUTPUTS_{self.index}'], var_name='y')
 
 
+class LayerNorm(Layer):
+    _expected_attributes = [
+        Attribute('embed_dim'),
+        Attribute('seq_len'),
+        WeightAttribute('scale'),
+        WeightAttribute('bias'),
+        TypeAttribute('scale'),
+        TypeAttribute('bias'),
+        TypeAttribute('sum'),
+        TypeAttribute('sum_sqr'),
+        TypeAttribute('mean'),
+        TypeAttribute('var_table'),
+    ]
+    def initialize(self):
+        self.add_weights_variable(name='scale')
+        self.add_weights_variable(name='bias')
+        dims = ['ln_seq_out_{}'.format(self.index), 'ln_feature_out_{}'.format(self.index)]
+        shape = [self.attributes['seq_len'], self.attributes['embed_dim']]
+        self.add_output_variable(shape, dims)
+
+        self.set_attr('sum_t', NamedType(*reversed(self.model.config.get_precision(self, 'sum'))))
+        self.set_attr('sum_sqr_t', NamedType(*reversed(self.model.config.get_precision(self, 'sum_sqr'))))
+        self.set_attr('mean_t', NamedType(*reversed(self.model.config.get_precision(self, 'mean'))))
+        self.set_attr('var_table_t', NamedType(*reversed(self.model.config.get_precision(self, 'var_table'))))
+
+
 layer_map = {
     'Input': Input,
     'InputLayer': Input,
@@ -1410,6 +1436,7 @@ layer_map = {
     'GarNetStack': GarNetStack,
     'LayerGroup': LayerGroup,
     'SymbolicExpression': SymbolicExpression,
+    'LayerNorm': LayerNorm,
     # TensorFlow-specific layers:
     'BiasAdd': BiasAdd,
 }

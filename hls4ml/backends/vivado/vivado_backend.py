@@ -26,6 +26,7 @@ from hls4ml.model.layers import (
     SeparableConv2D,
     SimpleRNN,
     Softmax,
+    LayerNorm,
 )
 from hls4ml.model.optimizer import get_backend_passes, layer_optimizer
 from hls4ml.model.types import FixedPrecisionType, IntegerPrecisionType, NamedType, PackedType
@@ -46,12 +47,21 @@ class VivadoBackend(FPGABackend):
             GRU,
         ]
 
+        transformer_layers = [
+            LayerNorm,
+        ]
+
         for layer in rnn_layers:
             attrs = self.attribute_map.get(layer, [])
             attrs.append(ConfigurableAttribute('recurrent_reuse_factor', default=1))
             attrs.append(ConfigurableAttribute('static', value_type=bool, default=True))
             attrs.append(ConfigurableAttribute('table_size', default=1024))
             attrs.append(TypeAttribute('table', default=FixedPrecisionType(18, 8)))
+            self.attribute_map[layer] = attrs
+
+        for layer in transformer_layers:
+            attrs = self.attribute_map.get(layer, [])
+            attrs.append(ConfigurableAttribute('tiling_factor', value_type=list, default=[1,1,1]))
             self.attribute_map[layer] = attrs
 
         # Add ParallelizationFactor to Conv1D/2D
@@ -261,7 +271,7 @@ class VivadoBackend(FPGABackend):
     def init_base_layer(self, layer):
         reuse_factor = layer.model.config.get_reuse_factor(layer)
         layer.set_attr('reuse_factor', reuse_factor)
-
+        tiling_factor = layer.model.config.get_tiling_factor(layer)
         target_cycles = layer.model.config.get_target_cycles(layer)
         layer.set_attr('target_cycles', target_cycles)
 
@@ -542,3 +552,11 @@ class VivadoBackend(FPGABackend):
     @layer_optimizer(GarNetStack)
     def init_garnet_stack(self, layer):
         self.init_garnet(layer)
+
+    @layer_optimizer(LayerNorm)
+    def init_layernorm(self, layer):
+        tiling_factor = layer.model.config.get_tiling_factor(layer)
+        layer.set_attr('tiling_factor', tiling_factor)
+        layer.set_attr('index_t', NamedType(f'layer{layer.index}_index', IntegerPrecisionType(width=1, signed=False)))
+        layer.set_attr('iotype', layer.model.config.get_config_value('IOType'))
+        layer.set_attr('accum_t', NamedType(layer.name+'_accum_t', FixedPrecisionType(64, 16)))

@@ -28,6 +28,7 @@ from hls4ml.model.layers import (
     SeparableConv2D,
     SimpleRNN,
     Softmax,
+    LayerNorm,
 )
 from hls4ml.model.optimizer import model_optimizer
 from hls4ml.model.types import (
@@ -65,6 +66,7 @@ class FPGABackend(Backend):
             LSTM,
             GRU,
             Dot,
+            LayerNorm,
         ]
 
         for layer in accum_layers:
@@ -100,6 +102,16 @@ class FPGABackend(Backend):
             )
         )
         self.attribute_map[Softmax] = softmax_attrs
+
+        ln_attrs = self.attribute_map.get(LayerNorm, [])
+        ln_attrs.append(
+            TypeAttribute(
+                'var_table',
+                default=FixedPrecisionType(18, 8, signed=False, rounding_mode=RoundingMode.RND_CONV, saturation_mode=SaturationMode.SAT),
+            )
+        )
+        ln_attrs.append(ConfigurableAttribute('var_table_size', default=1024))
+        ln_attrs.append(ConfigurableAttribute('var_table_range', default=8))
 
     def create_layer_class(self, layer_class):
         new_attrubutes = []
