@@ -27,6 +27,7 @@ from hls4ml.model.layers import (
     SeparableConv2D,
     SimpleRNN,
     Softmax,
+    LayerNorm,
 )
 from hls4ml.model.optimizer import get_backend_passes, layer_optimizer
 from hls4ml.model.types import FixedPrecisionType, IntegerPrecisionType, NamedType, PackedType
@@ -497,6 +498,15 @@ class VivadoBackend(FPGABackend):
             assert (
                 len(layer.get_input_variable().shape) == 1
             ), 'Softmax with io_parallel strategy cannot be used on multidimensional tensors.'
+
+    @layer_optimizer(LayerNorm)
+    def init_layernorm(self, layer):
+        if 'table_t' not in layer.attributes:
+            layer.set_attr('table_t', NamedType(name=layer.name + '_table_t', precision=FixedPrecisionType(width=32, integer=8)))
+        if 'table_size' not in layer.attributes:
+            layer.set_attr('table_size', 2048)  #table size
+        if 'table_range' not in layer.attributes:
+            layer.set_attr('table_range', 1.0)  #table range
 
     @layer_optimizer(Embedding)
     def init_embed(self, layer):
