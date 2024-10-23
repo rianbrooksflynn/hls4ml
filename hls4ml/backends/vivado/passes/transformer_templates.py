@@ -95,13 +95,7 @@ class MhaConfigTemplate(LayerConfigTemplate):
         mult_params1['index'] = str(node.index)
         mult_params1['nzeros'] = 0
         mult_params1['nonzeros'] = params['feature_dim'] * params['num_heads'] * params['head_dim_key']
-        if node.get_attr('strategy').lower() == 'latency':
-            mult_params1['dense_function'] = 'DenseLatency'
-        elif node.get_attr('strategy').lower() == 'resource':
-            if int(mult_params1['reuse']) <= int(mult_params1['n_in']):
-                mult_params1['dense_function'] = 'DenseResource_rf_leq_nin'
-            else:
-                mult_params1['dense_function'] = 'DenseResource_rf_gt_nin_rem0'
+        mult_params1['dense_function'] = 'DenseLatency'
         mult_config1 = self.mult1_template.format(**mult_params1)
 
         mult_params2 = self._default_config_params(node)
@@ -116,13 +110,7 @@ class MhaConfigTemplate(LayerConfigTemplate):
         mult_params2['index'] = str(node.index)
         mult_params2['nzeros'] = 0
         mult_params2['nonzeros'] = params['feature_dim'] * params['num_heads'] * params['head_dim_key']
-        if node.get_attr('strategy').lower() == 'latency':
-            mult_params2['dense_function'] = 'DenseLatency'
-        elif node.get_attr('strategy').lower() == 'resource':
-            if int(mult_params2['reuse']) <= int(mult_params2['n_in']):
-                mult_params2['dense_function'] = 'DenseResource_rf_leq_nin'
-            else:
-                mult_params2['dense_function'] = 'DenseResource_rf_gt_nin_rem0'
+        mult_params2['dense_function'] = 'DenseLatency'
         mult_config2 = self.mult2_template.format(**mult_params2)
 
         act_params = self._default_config_params(node)
