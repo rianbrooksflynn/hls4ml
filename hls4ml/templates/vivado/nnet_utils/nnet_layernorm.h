@@ -28,6 +28,20 @@ struct layernorm_config {
     template <class x_T, class y_T> using product = nnet::product::mult<x_T, y_T>;
 };
 
+// template<typename CONFIG_T, int N_TABLE>
+// void init_invert_sqr_table(typename CONFIG_T::table_t table_out[N_TABLE])
+// {
+//     // Inversion function:
+//     //   result = 1/sqrt(x)
+//     float min_val = CONFIG_T::epsilon;
+//     float max_val = CONFIG_T::table_range;
+//     float step = max_val / (float)(N_TABLE);
+//     for (int ii = 0; ii < N_TABLE; ii++) {
+//         float in_val = min_val + step * ii;
+//         table_out[ii] = (typename CONFIG_T::table_t)(1.0/sqrt(in_val));
+//     }
+// }
+
 template <typename CONFIG_T, int N_TABLE>
 void init_invert_sqr_table(typename CONFIG_T::table_t table_in[N_TABLE], typename CONFIG_T::table_t table_out[N_TABLE]) {
     // Inversion function:
@@ -89,6 +103,10 @@ void layernorm_1d(data_T data[CONFIG_T::n_in / CONFIG_T::seq_len], res_T res[CON
     static typename CONFIG_T::table_t invert_sqr_table[CONFIG_T::table_size];
     static typename CONFIG_T::table_t index_table[CONFIG_T::table_size];
 #endif
+    // if (!initialized) {
+    //     init_invert_sqr_table<CONFIG_T, CONFIG_T::table_size>(invert_sqr_table);
+    //     initialized = true;
+    // }
     if (!initialized) {
         init_invert_sqr_table<CONFIG_T, CONFIG_T::table_size>(index_table, invert_sqr_table);
         initialized = true;
@@ -118,6 +136,12 @@ LAYERNORM_1D_VAR:
         sum_cache2 += diff;
     }
     var = CONFIG_T::template product<typename CONFIG_T::mean_t, typename CONFIG_T::mean_t>::product(sum_cache2, k_inv);
+
+    // int index = (var) * (CONFIG_T::table_size) * inv_range_inv;
+    // if (CONFIG_T::table_range > 1) index = (var) * (CONFIG_T::table_size) / (int)CONFIG_T::table_range;
+    // if (index < 0) index = 0;
+    // if (index > CONFIG_T::table_size - 1) index = CONFIG_T::table_size - 1;
+    // deno_inver = invert_sqr_table[index];
     lookup_invert_sqr<CONFIG_T>(var + var_epsilon, deno_inver, index_table, invert_sqr_table);
 
 LAYERNORM_1D_RESULT:
