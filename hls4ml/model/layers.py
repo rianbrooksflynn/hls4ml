@@ -1688,6 +1688,20 @@ class MultiHeadAttention(Layer):
         self.add_output_variable(shape, dims)
 
 
+class HEPT(Layer):
+    _expected_attributes = [
+        Attribute('n_blocks'),
+        Attribute('block_size'),
+        Attribute('dim_per_head'),
+        Attribute('coords_dim'),
+    ]
+
+    def initialize(self):
+        shape = list(self.attributes['output_shape'])
+        dims = [f'N_BLOCKS_{self.index}', f'BLOCK_SIZE_0_{self.index}', f'BLOCK_SIZE_1_{self.index}']
+        self.add_output_variable(shape, dims)
+
+
 layer_map = {
     'Input': Input,
     'InputLayer': Input,
@@ -1756,6 +1770,7 @@ layer_map = {
     'SymbolicExpression': SymbolicExpression,
     'LayerNormalization': LayerNormalization,
     'MultiHeadAttention': MultiHeadAttention,
+    'HEPT': HEPT,
     # TensorFlow-specific layers:
     'BiasAdd': BiasAdd,
 }

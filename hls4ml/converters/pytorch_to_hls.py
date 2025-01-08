@@ -134,9 +134,23 @@ def parse_pytorch_model(config, verbose=True):
     # dict of layer objects in non-traced form for access lateron
     children = {c[0]: c[1] for c in model.named_children()}
     # use symbolic_trace to get a full graph of the model
-    from torch.fx import symbolic_trace
 
-    traced_model = symbolic_trace(model)
+    class CustomFXTracer(torch.fx.Tracer):
+        def is_leaf_module(self, m: torch.nn.Module, module_qualified_name: str) -> bool:
+            """
+            Custom Tracer class to add HEPT as a leaf module so that it is not traced through by torch.fx
+            """
+            return (
+                m.__module__.startswith("torch.nn")
+                or m.__module__.startswith("torch.ao.nn")
+                or m.__class__.__name__ == "HEPT"
+            ) and not isinstance(m, torch.nn.Sequential)
+
+    tracer = CustomFXTracer()
+    traced_model = tracer.trace(model)
+    # from torch.fx import symbolic_trace
+
+    # traced_model = symbolic_trace(model)
     # Define layers to skip for conversion to HLS
     skip_layers = ['Dropout', 'Sequential']
 
@@ -159,7 +173,8 @@ def parse_pytorch_model(config, verbose=True):
 
     n_inputs = 0
 
-    for node in traced_model.graph.nodes:
+    # for node in traced_model.graph.nodes:
+    for node in traced_model.nodes:
         if node.op == 'call_module':
             # modules that are part of a torch.nn.Sequential with name 'name' have target names 'name.x',
             # where x is an integer numbering the elements of the Sequential
@@ -208,7 +223,8 @@ def parse_pytorch_model(config, verbose=True):
                 input_shapes = [output_shapes[str(node.args[0])]]
             # if a 'getitem' is the input to a node, step back in the graph to find the real source of the input
             elif "getitem" in node.args[0].name:
-                for tmp_node in traced_model.graph.nodes:
+                # for tmp_node in traced_model.graph.nodes:
+                for tmp_node in traced_model.nodes:
                     if tmp_node.name == node.args[0].name:
                         if "getitem" in tmp_node.args[0].name:
                             raise Exception('Nested getitem calles not resolved at the moment.')

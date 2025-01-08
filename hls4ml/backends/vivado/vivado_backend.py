@@ -20,6 +20,7 @@ from hls4ml.model.layers import (
     Embedding,
     GarNet,
     GarNetStack,
+    HEPT,
     Layer,
     LayerNormalization,
     MultiHeadAttention,
@@ -709,3 +710,12 @@ class VivadoBackend(FPGABackend):
         if 'exp_range' not in layer.attributes:
             layer.set_attr('exp_range', 8)
         layer.set_attr('strategy', 'resource')  # latency
+
+    @layer_optimizer(HEPT)
+    def init_hept(self, layer):
+        layer.set_attr('strategy', 'latency')
+        layer.set_attr('reuse_factor', 1)
+        index_t = IntegerPrecisionType(width=1, signed=False)
+        layer.set_attr('index_t', index_t)
+        if 'parallelization_factor' not in layer.attributes:
+            layer.set_attr('parallelization_factor', 16)
