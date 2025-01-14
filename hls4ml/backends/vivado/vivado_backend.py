@@ -719,3 +719,13 @@ class VivadoBackend(FPGABackend):
         layer.set_attr('index_t', index_t)
         if 'parallelization_factor' not in layer.attributes:
             layer.set_attr('parallelization_factor', 16)
+        if 'accum_t' not in layer.attributes:
+            layer.set_attr('accum_t', FixedPrecisionType(width=16, integer=6))
+        if 'table_t' not in layer.attributes:
+            layer.set_attr(
+                'table_t', NamedType(name=layer.name + '_table_t', precision=FixedPrecisionType(width=16, integer=1))
+            )
+        if 'table_range' not in layer.attributes:
+            layer.set_attr('table_range', 8)
+        if 'table_size' not in layer.attributes:
+            layer.set_attr('table_size', 1024)
