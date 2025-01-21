@@ -61,7 +61,8 @@ def transpose_config_gen(name: str, shape: tuple[int, ...], perm: tuple[int, ...
 
 hept_config_template = """struct config{index} : nnet::hept_config {{
     static const unsigned table_size = {table_size};
-    static const unsigned table_range = {table_range};
+    static const int table_min = {table_min};
+    static const int table_max = {table_max};
 
     typedef {accum_t.name} accum_t;
     typedef {table_t.name} table_t;
@@ -101,7 +102,8 @@ class HeptConfigTemplate(LayerConfigTemplate):
         params['dim_per_head'] = node.get_attr('dim_per_head')
         params['coords_dim'] = node.get_attr('coords_dim')
         params['table_size'] = node.get_attr('table_size')
-        params['table_range'] = node.get_attr('table_range')
+        params['table_min'] = node.get_attr('table_min')
+        params['table_max'] = node.get_attr('table_max')
         params['config_dense_qk'] = f'config{node.index}_dense_qk'
         params['config_dense_qkv'] = f'config{node.index}_dense_qkv'
         params['config_transpose_qk'] = f'config{node.index}_transpose_qk'

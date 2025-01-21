@@ -32,7 +32,7 @@ from hls4ml.model.layers import (
     Softmax,
 )
 from hls4ml.model.optimizer import get_backend_passes, layer_optimizer
-from hls4ml.model.types import FixedPrecisionType, IntegerPrecisionType, NamedType, PackedType
+from hls4ml.model.types import FixedPrecisionType, IntegerPrecisionType, NamedType, PackedType, SaturationMode
 from hls4ml.report import parse_vivado_report
 from hls4ml.utils import attribute_descriptions as descriptions
 
@@ -719,13 +719,16 @@ class VivadoBackend(FPGABackend):
         layer.set_attr('index_t', index_t)
         if 'parallelization_factor' not in layer.attributes:
             layer.set_attr('parallelization_factor', 16)
-        if 'accum_t' not in layer.attributes:
-            layer.set_attr('accum_t', FixedPrecisionType(width=16, integer=6))
         if 'table_t' not in layer.attributes:
             layer.set_attr(
-                'table_t', NamedType(name=layer.name + '_table_t', precision=FixedPrecisionType(width=16, integer=1))
+                'table_t', NamedType(name=layer.name + '_table_t', precision=FixedPrecisionType(width=16, integer=0, signed=False))
             )
-        if 'table_range' not in layer.attributes:
-            layer.set_attr('table_range', 8)
+        if 'table_min' not in layer.attributes:
+            layer.set_attr('table_min', -8)
+        if 'table_max' not in layer.attributes:
+            layer.set_attr('table_max', 0)
         if 'table_size' not in layer.attributes:
             layer.set_attr('table_size', 1024)
+        if 'accum_t' not in layer.attributes:
+            layer.set_attr('accum_t', NamedType(
+                name=layer.name + '_accum_t', precision=FixedPrecisionType(width=16, integer=6, saturation_mode=SaturationMode.SAT)))

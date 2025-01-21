@@ -17,7 +17,8 @@ namespace nnet {
 struct hept_config {
     // Lookup table sizes
     static const unsigned table_size = 1024;
-    static const unsigned table_range = 8;
+    static const int table_min = -8;
+    static const int table_max = 0;
 
     // Internal data type definitions
     typedef ap_fixed<16, 6> accum_t;
@@ -52,7 +53,7 @@ void negative_half_sum_square(
     #pragma HLS ARRAY_PARTITION variable=output complete
     #pragma HLS ARRAY_PARTITION variable=input complete
 
-    typename CONFIG_T::accum_t negative_half = -0.5;
+    const typename CONFIG_T::accum_t negative_half = -0.5;
     for (unsigned i = 0; i < CONFIG_T::n_heads * CONFIG_T::n_blocks * CONFIG_T::block_size; i++) {
         #pragma HLS UNROLL factor=CONFIG_T::parallelization_factor
         typename CONFIG_T::accum_t sum = 0;
@@ -66,10 +67,9 @@ void negative_half_sum_square(
 }
 
 template <typename CONFIG_T, int N_TABLE> void init_exp_table(typename CONFIG_T::table_t table_out[N_TABLE]) {
-    float step = (float)(CONFIG_T::table_range) / (float)(N_TABLE);
-    for (int ii = 0; ii < N_TABLE; ii++) {
-        float in_val = - step * ii;
-        table_out[ii] = (typename CONFIG_T::table_t)(std::exp(in_val));
+    float step = (float)(CONFIG_T::table_max - CONFIG_T::table_min) / (float)(N_TABLE);
+    for (int i = 0; i < N_TABLE; i++) {
+        table_out[i] = (typename CONFIG_T::table_t)(std::exp(CONFIG_T::table_min + step * i));
     }
 }
 
@@ -92,7 +92,7 @@ void add_clamp_exp(
         init_exp_table<CONFIG_T, CONFIG_T::table_size>(exp_table);
         initialized = true;
     }
-    static const unsigned inv_table_range = CONFIG_T::table_size / CONFIG_T::table_range;
+    static const unsigned inv_table_range = CONFIG_T::table_size / (CONFIG_T::table_max - CONFIG_T::table_min);
     
     #pragma HLS ARRAY_PARTITION variable=output complete
     #pragma HLS ARRAY_PARTITION variable=cluster_sum complete
@@ -108,9 +108,11 @@ void add_clamp_exp(
             #pragma HLS UNROLL
             for (unsigned b1 = 0; b1 < B; b1++) {
                 #pragma HLS UNROLL
-                res_T sum = cluster_sum[a * B * B + b * B + b1] + q_sq_05[a * B + b] + k_sq_05[a * B + b1];
-                res_T clamp_out = sum < 0 ? sum : (res_T)0.0;
-                int index = - clamp_out * inv_table_range;
+                typename CONFIG_T::accum_t sum = (typename CONFIG_T::accum_t)cluster_sum[a * B * B + b * B + b1] + 
+                    (typename CONFIG_T::accum_t)q_sq_05[a * B + b] + 
+                    (typename CONFIG_T::accum_t)k_sq_05[a * B + b1];
+                typename CONFIG_T::accum_t clamp_out = sum < 0 ? sum : (typename CONFIG_T::accum_t)0.0;
+                int index = (clamp_out + CONFIG_T::table_max - CONFIG_T::table_min) * inv_table_range;
                 if (index < 0) index = 0;
                 if (index > CONFIG_T::table_size - 1) index = CONFIG_T::table_size - 1;
                 output[a * B * B + b * B + b1] = exp_table[index];
