@@ -5,7 +5,7 @@ import numpy as np
 from math import prod
 
 # dense layer template
-dense_config_template = """struct config{index}_dense_{label} : nnet::dense_config {{
+dense_config_template = """struct config{index}_dense : nnet::dense_config {{
     static const unsigned n_in = {n_in};
     static const unsigned n_out = {n_out};
     static const unsigned io_type = nnet::{iotype};
@@ -60,19 +60,26 @@ def transpose_config_gen(name: str, shape: tuple[int, ...], perm: tuple[int, ...
     )
 
 hept_config_template = """struct config{index} : nnet::hept_config {{
-    static const unsigned table_size = {table_size};
-    static const int table_min = {table_min};
-    static const int table_max = {table_max};
+    static const unsigned eps_power = {eps_power};
+
+    static const unsigned exp_table_size = {exp_table_size};
+    static const int exp_table_min = {exp_table_min};
+    static const int exp_table_max = {exp_table_max};
+
+    static const unsigned inv_table_size = {inv_table_size};
+    static const int inv_table_max = {inv_table_max};
 
     typedef {accum_t.name} accum_t;
-    typedef {table_t.name} table_t;
-    typedef {config_dense_qk} dense_conf_qk;
-    typedef {config_dense_qkv} dense_conf_qkv;
+    typedef {exp_table_t.name} exp_table_t;
+    typedef {inv_table_t.name} inv_table_t;
+    typedef {config_dense} dense_conf;
     typedef {config_transpose_qk} transpose_conf_qk;
+    typedef {config_transpose_v} transpose_conf_v;
+    typedef {config_transpose_output} transpose_conf_output;
 
     static const unsigned n_heads = {n_heads};
-    static const unsigned n_blocks = {n_blocks};
-    static const unsigned block_size = {block_size};
+    static const unsigned batch_size = {batch_size};
+    static const unsigned seq_len = {seq_len};
     static const unsigned dim_per_head = {dim_per_head};
     static const unsigned coords_dim = {coords_dim};
 
@@ -83,7 +90,7 @@ hept_config_template = """struct config{index} : nnet::hept_config {{
     static const bool store_weights_in_bram = false;
 }};\n"""
 
-hept_function_template = """nnet::hept<{input_t}, {output_t}, {config}>({input_q}, {input_k}, {input_v}, {output});"""
+hept_function_template = """nnet::hept<{input_t}, {output_t}, {config}>({input_q}, {input_k}, {input_v}, {input_mask}, {output});"""
 
 hept_include_list = ['nnet_utils/nnet_hept.h']
 
@@ -97,65 +104,65 @@ class HeptConfigTemplate(LayerConfigTemplate):
     def format(self, node):
         params = self._default_config_params(node)
         params['n_heads'] = node.get_attr('n_heads')
-        params['n_blocks'] = node.get_attr('n_blocks')
-        params['block_size'] = node.get_attr('block_size')
+        params['batch_size'] = node.get_attr('batch_size')
+        params['seq_len'] = node.get_attr('seq_len')
         params['dim_per_head'] = node.get_attr('dim_per_head')
         params['coords_dim'] = node.get_attr('coords_dim')
-        params['table_size'] = node.get_attr('table_size')
-        params['table_min'] = node.get_attr('table_min')
-        params['table_max'] = node.get_attr('table_max')
-        params['config_dense_qk'] = f'config{node.index}_dense_qk'
-        params['config_dense_qkv'] = f'config{node.index}_dense_qkv'
+
+        params['eps_power'] = node.get_attr('eps_power')
+        params['exp_table_size'] = node.get_attr('exp_table_size')
+        params['exp_table_min'] = node.get_attr('exp_table_min')
+        params['exp_table_max'] = node.get_attr('exp_table_max')
+        params['inv_table_size'] = node.get_attr('inv_table_size')
+        params['inv_table_max'] = node.get_attr('inv_table_max')
+
+        params['config_dense'] = f'config{node.index}_dense'
         params['config_transpose_qk'] = f'config{node.index}_transpose_qk'
+        params['config_transpose_v'] = f'config{node.index}_transpose_v'
+        params['config_transpose_output'] = f'config{node.index}_transpose_output'
         params['strategy'] = node.get_attr('strategy')
         params['parallelization_factor'] = node.get_attr('parallelization_factor')
         hept_config = self.template.format(**params)
 
-        # dense qk config
-        dense_qk_params = self._default_config_params(node)
-        dense_qk_params['label'] = 'qk'
-        dense_qk_params['strategy'] = 'latency'
-        dense_qk_params['n_in'] = params['dim_per_head'] + params['coords_dim']
-        dense_qk_params['n_out'] = params['block_size']
-        dense_qk_params['product_type'] = get_backend('vivado').product_type(
+        # dense config
+        dense_params = self._default_config_params(node)
+        dense_params['strategy'] = 'latency'
+        dense_params['n_in'] = params['seq_len']
+        dense_params['n_out'] = params['dim_per_head']
+        dense_params['product_type'] = get_backend('vivado').product_type(
             node.get_input_variable().type.precision, node.get_input_variable().type.precision
         )
-        dense_qk_params['weight_type'] = node.get_input_variable().type.name
-        dense_qk_params['bias_type'] = node.get_input_variable().type.name
-        dense_qk_params['reuse'] = params['reuse']
-        dense_qk_params['index'] = str(node.index)
-        dense_qk_params['nzeros'] = 0
-        dense_qk_params['nonzeros'] = params['block_size'] * (params['dim_per_head'] + params['coords_dim'])
-        dense_qk_params['dense_function'] = 'DenseLatency'
-        dense_qk_config = self.dense_conf_qk_template.format(**dense_qk_params)
-
-        # dense qkv config
-        dense_qkv_params = self._default_config_params(node)
-        dense_qkv_params['label'] = 'qkv'
-        dense_qkv_params['strategy'] = 'latency'
-        dense_qkv_params['n_in'] = params['block_size']
-        dense_qkv_params['n_out'] = params['dim_per_head']
-        dense_qkv_params['product_type'] = get_backend('vivado').product_type(
-            node.get_input_variable().type.precision, node.get_input_variable().type.precision
-        )
-        dense_qkv_params['weight_type'] = node.get_input_variable().type.name
-        dense_qkv_params['bias_type'] = node.get_input_variable().type.name
-        dense_qkv_params['reuse'] = params['reuse']
-        dense_qkv_params['index'] = str(node.index)
-        dense_qkv_params['nzeros'] = 0
-        dense_qkv_params['nonzeros'] = params['block_size'] * params['dim_per_head']
-        dense_qkv_params['dense_function'] = 'DenseLatency'
-        dense_qkv_config = self.dense_conf_qkv_template.format(**dense_qkv_params)
+        dense_params['weight_type'] = node.get_input_variable().type.name
+        dense_params['bias_type'] = node.get_input_variable().type.name
+        dense_params['reuse'] = params['reuse']
+        dense_params['index'] = str(node.index)
+        dense_params['nzeros'] = 0
+        dense_params['nonzeros'] = params['seq_len'] * params['dim_per_head']
+        dense_params['dense_function'] = 'DenseLatency'
+        dense_config = self.dense_conf_qkv_template.format(**dense_params)
 
         # transpose qk config
-        trans_qk_shape = tuple(node.get_input_variable().shape)
-        trans_qk_indices = (0, 1, 3, 2)
+        trans_qk_shape = (params['n_heads'], params['batch_size'], params['seq_len'], params['dim_per_head'] + params['coords_dim'])
+        trans_qk_indices = (1, 0, 2, 3)
         trans_qk_config_name = f'config{node.index}_transpose_qk'
         trans_qk_config = transpose_config_gen(trans_qk_config_name, trans_qk_shape, trans_qk_indices)
 
-        return "\n".join([dense_qk_config,
-                          dense_qkv_config,
+        # transpose v config
+        trans_v_shape = (params['n_heads'], params['batch_size'], params['seq_len'], params['dim_per_head'])
+        trans_v_indices = (1, 0, 2, 3)
+        trans_v_config_name = f'config{node.index}_transpose_v'
+        trans_v_config = transpose_config_gen(trans_v_config_name, trans_v_shape, trans_v_indices)
+
+        # transpose output config
+        trans_output_shape = (params['batch_size'], params['n_heads'], params['seq_len'], params['dim_per_head'])
+        trans_output_indices = (1, 0, 2, 3)
+        trans_output_config_name = f'config{node.index}_transpose_output'
+        trans_output_config = transpose_config_gen(trans_output_config_name, trans_output_shape, trans_output_indices)
+
+        return "\n".join([dense_config,
                           trans_qk_config,
+                          trans_v_config,
+                          trans_output_config,
                           hept_config])
 
 
@@ -174,6 +181,7 @@ class HeptFunctionTemplate(FunctionCallTemplate):
         params['input_q'] = node.model.get_layer_output_variable(node.inputs[0]).name
         params['input_k'] = node.model.get_layer_output_variable(node.inputs[1]).name
         params['input_v'] = node.model.get_layer_output_variable(node.inputs[2]).name
+        params['input_mask'] = node.model.get_layer_output_variable(node.inputs[3]).name
         params['output'] = node.get_output_variable().name
 
         return self.template.format(**params)

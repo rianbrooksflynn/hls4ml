@@ -143,7 +143,7 @@ def parse_pytorch_model(config, verbose=True):
             return (
                 m.__module__.startswith("torch.nn")
                 or m.__module__.startswith("torch.ao.nn")
-                or m.__class__.__name__ == "HEPT"
+                or m.__class__.__name__ in ["HEPT", "SimplifiedHEPT", "HEPTKernel"]
             ) and not isinstance(m, torch.nn.Sequential)
 
     tracer = CustomFXTracer()

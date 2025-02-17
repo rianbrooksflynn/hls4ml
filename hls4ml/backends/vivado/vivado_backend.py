@@ -719,16 +719,26 @@ class VivadoBackend(FPGABackend):
         layer.set_attr('index_t', index_t)
         if 'parallelization_factor' not in layer.attributes:
             layer.set_attr('parallelization_factor', 16)
-        if 'table_t' not in layer.attributes:
+        if 'eps_power' not in layer.attributes:
+            layer.set_attr('eps_power', 4)
+        if 'exp_table_t' not in layer.attributes:
             layer.set_attr(
-                'table_t', NamedType(name=layer.name + '_table_t', precision=FixedPrecisionType(width=16, integer=0, signed=False))
+                'exp_table_t', NamedType(name=layer.name + '_exp_table_t', precision=FixedPrecisionType(width=16, integer=0, signed=False))
             )
-        if 'table_min' not in layer.attributes:
-            layer.set_attr('table_min', -8)
-        if 'table_max' not in layer.attributes:
-            layer.set_attr('table_max', 0)
-        if 'table_size' not in layer.attributes:
-            layer.set_attr('table_size', 1024)
+        if 'exp_table_min' not in layer.attributes:
+            layer.set_attr('exp_table_min', -8)
+        if 'exp_table_max' not in layer.attributes:
+            layer.set_attr('exp_table_max', 0)
+        if 'exp_table_size' not in layer.attributes:
+            layer.set_attr('exp_table_size', 1024)
+        if 'inv_table_t' not in layer.attributes:
+            layer.set_attr(
+                'inv_table_t', NamedType(name=layer.name + '_inv_table_t', precision=FixedPrecisionType(width=16, integer=10, signed=False, saturation_mode=SaturationMode.SAT))
+            )
+        if 'inv_table_max' not in layer.attributes:
+            layer.set_attr('inv_table_max', 8)
+        if 'inv_table_size' not in layer.attributes:
+            layer.set_attr('inv_table_size', 1024)
         if 'accum_t' not in layer.attributes:
             layer.set_attr('accum_t', NamedType(
                 name=layer.name + '_accum_t', precision=FixedPrecisionType(width=16, integer=6, saturation_mode=SaturationMode.SAT)))
