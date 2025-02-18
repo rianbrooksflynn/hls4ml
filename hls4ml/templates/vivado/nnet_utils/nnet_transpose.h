@@ -1,12 +1,12 @@
-#ifndef NNET_TRANSPOSE_H_
-#define NNET_TRANSPOSE_H_
+#ifndef NNET_PERMUTE_H_
+#define NNET_PERMUTE_H_
 
 namespace nnet {
 
 struct transpose_config {
     static const unsigned dims;
     static const unsigned N;
-    // vivado/vitis hls can't indexing constexpr array for some reason
+    // vivado/vitis hls can't index constexpr array for some reason
     // and vivado hls don't like template recursion either (vitis is fine)
     // thus this appears to be the only workaround (or overkill it with codegen)
     static const unsigned *const from_shape;

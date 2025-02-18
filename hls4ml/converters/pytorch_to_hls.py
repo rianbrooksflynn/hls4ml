@@ -1,6 +1,7 @@
-import torch
+import numpy as np
 
 from hls4ml.model import ModelGraph
+from hls4ml.utils.dependency import requires
 
 
 class PyTorchModelReader:
@@ -26,6 +27,8 @@ class PyTorchModelReader:
 
 class PyTorchFileReader(PyTorchModelReader):  # Inherit get_weights_data method
     def __init__(self, config):
+        import torch
+
         self.config = config
 
         if not torch.cuda.is_available():
@@ -115,6 +118,8 @@ def parse_pytorch_model(config, verbose=True):
     Returns:
         ModelGraph: hls4ml model object.
     """
+    import torch
+    from torch.fx import symbolic_trace
 
     # This is a list of dictionaries to hold all the layer info we need to generate HLS
     layer_list = []
@@ -161,6 +166,7 @@ def parse_pytorch_model(config, verbose=True):
     inputs_map = {}
 
     input_layers = []
+    output_layers = []
 
     # Output shape tracking
     output_shapes = {}
@@ -172,6 +178,23 @@ def parse_pytorch_model(config, verbose=True):
     layer_counter = 0
 
     n_inputs = 0
+
+    # # check for constant nodes
+    # merge_layers = ['add', 'mul', 'sub', 'fmin', 'fmax']
+    # i = 0  # count number of consts and use it in the name
+    # for node in traced_model.graph.nodes:
+    #     if node.name.split('_')[0] in merge_layers:
+    #         for arg in node.args:
+    #             if np.isscalar(arg):
+    #                 # add an input node with the constant value
+    #                 new_node = traced_model.graph.placeholder(
+    #                     name='const_' + str(i), type_expr=torch.Tensor, default_value=arg
+    #                 )
+    #                 node.prepend(new_node)
+    #                 node.update_arg(1, new_node)
+    #                 i += 1
+
+    # traced_model.graph.lint()
 
     # for node in traced_model.graph.nodes:
     for node in traced_model.nodes:
@@ -265,13 +288,26 @@ def parse_pytorch_model(config, verbose=True):
 
             input_layer = {}
             input_layer['name'] = node.name
-            input_layer['class_name'] = 'InputLayer'
-            input_layer['input_shape'] = list(input_shapes[n_inputs][1:])
-            layer_list.insert(n_inputs, input_layer)
 
-            output_shapes[input_layer['name']] = list(input_shapes[n_inputs])
-            input_layers.append(input_layer['name'])
-            n_inputs += 1
+            if 'const' in node.name:
+                pytorch_class = 'Constant'
+                layer, output_shape = layer_handlers[pytorch_class](pytorch_class, node.name, node)
+
+                layer_list.append(layer)
+
+                assert output_shape is not None
+                output_shapes[layer['name']] = output_shape
+
+            else:
+
+                input_layer['class_name'] = 'InputLayer'
+                input_layer['input_shape'] = list(input_shapes[n_inputs][1:])
+                layer_list.insert(n_inputs, input_layer)
+
+                output_shapes[input_layer['name']] = list(input_shapes[n_inputs])
+
+                input_layers.append(input_layer['name'])
+                n_inputs += 1
 
             layer_counter += 1
 
@@ -381,11 +417,23 @@ def parse_pytorch_model(config, verbose=True):
     if len(input_layers) == 0:
         input_layers = None
 
-    return layer_list, input_layers
+    for layer in layer_list:
+        if layer['class_name'] == 'InputLayer':
+            continue
+        is_input = False
+        for lay in layer_list:
+            if 'inputs' not in lay.keys():
+                continue
+            if layer['name'] in lay['inputs']:
+                is_input = True
+        if not is_input:
+            output_layers.append(layer['name'])
+    return layer_list, input_layers, output_layers
 
 
+@requires('_torch')
 def pytorch_to_hls(config):
-    layer_list, input_layers = parse_pytorch_model(config)
+    layer_list, input_layers, output_layers = parse_pytorch_model(config)
     print('Creating HLS model')
-    hls_model = ModelGraph(config, layer_list, inputs=input_layers)
+    hls_model = ModelGraph(config, layer_list, inputs=input_layers, outputs=output_layers)
     return hls_model
