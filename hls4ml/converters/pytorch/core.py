@@ -1,4 +1,23 @@
+import numpy as np
+
 from hls4ml.converters.pytorch_to_hls import pytorch_handler
+
+
+@pytorch_handler('Constant')
+def parse_constant_layer(operation, layer_name, node):
+    assert 'Constant' in operation
+
+    layer = {}
+    layer['inputs'] = []
+
+    layer['class_name'] = 'Constant'
+    layer['name'] = layer_name
+
+    constant = np.array(node._args)
+    layer['value'] = constant
+    output_shape = constant.shape
+
+    return layer, output_shape
 
 
 @pytorch_handler('Linear')
@@ -55,16 +74,20 @@ def parse_activation_layer(operation, layer_name, input_names, input_shapes, nod
         if layer['class_name'] == 'ELU':
             layer['activ_param'] = class_object.alpha
         if layer['class_name'] == 'PReLU':
-            layer['alpha_data'] = class_object.weight.data.numpy()
+            layer['param_data'] = class_object.weight.data.numpy()
         if layer['class_name'] == 'Threshold':
             layer['activ_param'] = class_object.threshold
             layer['class_name'] = 'ThresholdedReLU'
             layer['activation'] = 'ThresholdedReLU'
             if layer['activ_param'] < 0:
                 raise Exception('negative threshold values not supported')
-
-        if hasattr(node, 'dim'):
+        if hasattr(class_object, 'dim'):
             layer['axis'] = class_object.dim
+            if layer['class_name'] == 'Softmax' and layer['axis'] is None:
+                layer['axis'] = -1
+            if 'IOType' in config:
+                if layer['class_name'] == 'Softmax' and config['IOType'] == 'io_stream' and layer['axis'] != -1:
+                    raise Exception('dim needs to be -1 for io_stream')
     else:
         if layer['class_name'] in ['ReLU', 'Sigmoid', 'Tanh']:
             layer['class_name'] = 'Activation'
@@ -80,6 +103,11 @@ def parse_activation_layer(operation, layer_name, input_names, input_shapes, nod
             layer['activation'] = 'ThresholdedReLU'
         if 'dim' in node.kwargs:
             layer['axis'] = node.kwargs['dim']
+            if layer['class_name'] == 'Softmax' and layer['axis'] is None:
+                layer['axis'] = -1
+            if 'IOType' in config:
+                if layer['class_name'] == 'Softmax' and config['IOType'] == 'io_stream' and layer['axis'] != -1:
+                    raise Exception('dim needs to be -1 for io_stream')
 
     output_shape = input_shapes[0]
     return layer, output_shape
