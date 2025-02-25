@@ -1692,16 +1692,18 @@ class MultiHeadAttention(Layer):
 
 class HEPT(Layer):
     _expected_attributes = [
+        Attribute('n_hashes'),
         Attribute('n_heads'),
-        Attribute('batch_size'),
-        Attribute('seq_len'),
+        Attribute('padded_size'),
+        Attribute('n_blocks'),
+        Attribute('block_size'),
         Attribute('dim_per_head'),
         Attribute('coords_dim'),
     ]
 
     def initialize(self):
         shape = list(self.attributes['output_shape'])
-        dims = [f'N_HEADS_{self.index}', f'BATCH_SEQ_{self.index}', f'DIM_PER_HEAD_{self.index}']
+        dims = [f'N_HASHES_{self.index}', f'N_HEADS_{self.index}', f'N_BLOCKS_{self.index}', f'BLOCK_SIZE_{self.index}', f'DIM_PER_HEAD_{self.index}']
         self.add_output_variable(shape, dims)
 
 

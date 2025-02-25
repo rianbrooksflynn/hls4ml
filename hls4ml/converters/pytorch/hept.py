@@ -1,7 +1,7 @@
 from hls4ml.converters.pytorch_to_hls import pytorch_handler
 
 
-@pytorch_handler('HEPT', 'SimplifiedHEPT', 'HEPTKernel')
+@pytorch_handler('HEPT')
 def parse_hept_layer(
     operation, layer_name, input_names, input_shapes, node, class_object, data_reader, config
 ):
@@ -14,17 +14,23 @@ def parse_hept_layer(
     layer['name'] = layer_name
     layer['inputs'] = input_names
 
+    layer['n_hashes'] = class_object.n_hashes
     layer['n_heads'] = class_object.n_heads
-    layer['batch_size'] = class_object.batch_size
-    layer['seq_len'] = class_object.seq_len
+    layer['padded_size'] = class_object.padded_size
+    layer['n_blocks'] = class_object.n_blocks
+    layer['block_size'] = class_object.block_size
     layer['dim_per_head'] = class_object.dim_per_head
     layer['coords_dim'] = class_object.coords_dim
+
+    assert layer['padded_size'] == layer['n_blocks'] * layer['block_size']
+
     layer['query_shape'] = input_shapes[0]
     layer['key_shape'] = input_shapes[1]
     layer['value_shape'] = input_shapes[2]
-    layer['mask_shape'] = input_shapes[3]
+    layer['shifts_shape'] = input_shapes[3]
+    # layer['mask_shape'] = input_shapes[3]
 
-    output_shape = (layer['n_heads'], layer['batch_size'] * layer['seq_len'], layer['dim_per_head'])
+    output_shape = (layer['n_hashes'], layer['n_heads'], layer['n_blocks'], layer['block_size'], layer['dim_per_head'])
     layer['output_shape'] = output_shape
 
     return layer, output_shape
