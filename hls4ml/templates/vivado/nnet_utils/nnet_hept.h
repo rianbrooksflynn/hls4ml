@@ -129,40 +129,46 @@ void shift_hashed(
 }
 
 template <class data_T, typename CONFIG_T>
-void merge(unsigned indices[CONFIG_T::padded_size], data_T arr[CONFIG_T::padded_size], unsigned left, unsigned mid, unsigned right) {
-    unsigned temp[CONFIG_T::padded_size];  // Temporary array for merging
-    unsigned i = left, j = mid + 1, k = 0;
+void merge_sort(unsigned indices[CONFIG_T::padded_size], data_T arr[CONFIG_T::padded_size]) {
+    #pragma HLS INLINE off
+
+    unsigned n = CONFIG_T::padded_size;
+    unsigned temp[CONFIG_T::padded_size]; // Temporary array for merging
 
     #pragma HLS ARRAY_PARTITION variable=temp complete
 
-    // Merge two halves into temp[]
-    while (i <= mid && j <= right) {
-        #pragma HLS PIPELINE
-        if (arr[indices[i]] <= arr[indices[j]]) {
-            temp[k++] = indices[i++];
-        } else {
-            temp[k++] = indices[j++];
+    for (unsigned width = 1; width < n; width *= 2) {
+        for (unsigned left = 0; left < n - 1; left += 2 * width) {
+            #pragma HLS UNROLL
+            unsigned mid = left + width - 1 < n - 1 ? left + width - 1 : n - 1;
+            unsigned right = left + 2 * width - 1 < n - 1 ? left + 2 * width - 1 : n - 1;
+
+            // Merge two halves
+            unsigned i = left, j = mid + 1, k = 0;
+
+            while (i <= mid && j <= right) {
+                #pragma HLS PIPELINE
+                if (arr[indices[i]] <= arr[indices[j]]) {
+                    temp[k++] = indices[i++];
+                } else {
+                    temp[k++] = indices[j++];
+                }
+            }
+            while (i <= mid) {
+                #pragma HLS PIPELINE
+                temp[k++] = indices[i++];
+            }
+            while (j <= right) {
+                #pragma HLS PIPELINE
+                temp[k++] = indices[j++];
+            }
+
+            // Copy back sorted indices to original array
+            for (unsigned i = 0; i < k; i++) {
+                #pragma HLS UNROLL factor=CONFIG_T::parallelization_factor
+                indices[left + i] = temp[i];
+            }
         }
-    }
-    while (i <= mid) temp[k++] = indices[i++];
-    while (j <= right) temp[k++] = indices[j++];
-
-    // Copy back sorted indices to original array
-    for (unsigned i = 0; i < k; i++) {
-        #pragma HLS UNROLL factor=CONFIG_T::parallelization_factor
-        indices[left + i] = temp[i];
-    }
-}
-
-template <class data_T, typename CONFIG_T>
-void merge_sort(unsigned indices[CONFIG_T::padded_size], data_T arr[CONFIG_T::padded_size], unsigned left, unsigned right) {
-    #pragma HLS INLINE off
-    if (left < right) {
-        unsigned mid = (left + right) / 2;
-
-        nnet::merge_sort<data_T, CONFIG_T>(indices, arr, left, mid);
-        nnet::merge_sort<data_T, CONFIG_T>(indices, arr, mid + 1, right);
-        nnet::merge<data_T, CONFIG_T>(indices, arr, left, mid, right);
     }
 }
 
@@ -177,7 +183,7 @@ void argsort(data_T arr[CONFIG_T::padded_size], unsigned sorted_indices[CONFIG_T
         sorted_indices[i] = i;
     }
 
-    nnet::merge_sort<data_T, CONFIG_T>(sorted_indices, arr, 0, CONFIG_T::padded_size - 1);
+    nnet::merge_sort<data_T, CONFIG_T>(sorted_indices, arr);
 }
 
 template <class data_T, class res_T, typename CONFIG_T>
